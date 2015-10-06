@@ -6,6 +6,7 @@
 #include "draw.h"
 #include "fs.h"
 #include "hid.h"
+#include "paths.h"
 
 void menu_select_patches()
 {
@@ -70,20 +71,34 @@ void main()
         return;
     }
 
-    // This function already correctly draws error messages
-    if (load_firm() != 0) return;
-
-    if (load_cakes_info("/cakes/patches") != 0) {
-        draw_loading("Failed to read some cakes", "Make sure your cakes are up to date\n  and your SD card can be read correctly");
-        return;
-    }
-
     load_config();
 
     // If the L button isn't pressed, autoboot.
     if (config->autoboot_enabled && *hid_regs ^ 0xFFF ^ key_l) {
-        boot_cfw();
+        print("Autobooting...");
+
+        if (read_file(firm_loc, PATH_PATCHED_FIRMWARE, 0) != 0 ||
+                firm_loc->magic != FIRM_MAGIC) {
+            print("Failed to load patched FIRM");
+            draw_message("Failed to load patched FIRM", "The option to autoboot was selected,\n  but no valid FIRM could be found at\n  " PATH_PATCHED_FIRMWARE);
+        } else {
+            // boot_firm() requires current_firm->console.
+            struct firm_signature config_firm = {.console = config->firm_console}; 
+            current_firm = &config_firm;
+
+            boot_firm();
+        }
     }
+
+    // This function already correctly draws error messages
+    if (load_firm() != 0) return;
+
+    if (load_cakes_info(PATH_PATCHES) != 0) {
+        draw_loading("Failed to read some cakes", "Make sure your cakes are up to date\n  and your SD card can be read correctly");
+        return;
+    }
+
+    load_config_cakes();
 
     menu_main();
 }
